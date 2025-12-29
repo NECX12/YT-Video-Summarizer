@@ -45,7 +45,7 @@ def extract_transcript(state: GraphState):
     fetched_transcript = ytt_api.fetch(video_id)
     transcript_text = " "
     for snip in fetched_transcript:
-       transcript_text += " " + snip.text
+       transcript_text += "" + snip.text
     return {"transcript": transcript_text}
 
 def summarize_transcript(state: GraphState):
@@ -54,7 +54,7 @@ def summarize_transcript(state: GraphState):
         template ="""
         Summarize the following transcript in a concise manner: {transcript}
     """,
-    input_variables = [transcript])
+    input_variables = ["transcript"])
     chain = template | llm
     result = chain.invoke({"transcript": transcript})
     return {"summary": result.content}
@@ -107,3 +107,23 @@ def video_suggestion(state: GraphState):
 
 builder = StateGraph(GraphState)
 
+builder.add_node("extract_video_id", extract_video_id)
+builder.add_node("extract_transcript", extract_transcript)
+builder.add_node("summarize_transcript", summarize_transcript)
+builder.add_node("generate_questions", generate_questions)
+builder.add_node("next_steps", next_steps)
+builder.add_node('find_keyword', find_keyword)
+builder.add_node('video_suggestion', video_suggestion)
+
+builder.add_edge(START, "extract_video_id")
+builder.add_edge("extract_video_id", "extract_transcript")
+builder.add_edge("extract_transcript", "summarize_transcript")
+builder.add_edge("summarize_transcript", 'generate_questions')
+builder.add_edge("summarize_transcript", "next_steps")
+builder.add_edge("extract_transcript", "find_keywords")
+builder.add_edge("find_keywords", "video_suggestion")
+builder.add_edge("generate_question", END)
+builder.add_edge("next_steps", END)
+builder.add_edge("video_suggestion", END)
+
+graph = builder.compile()
