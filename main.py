@@ -3,6 +3,8 @@ from typing import Optional, List
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
+from langchain_community.tools import YouTubeSearchTool
+from langgraph.graph import StateGraph, START, END
 from youtube_transcript_api import YouTubeTranscriptApi
 
 load_dotenv()
@@ -56,3 +58,52 @@ def summarize_transcript(state: GraphState):
     chain = template | llm
     result = chain.invoke({"transcript": transcript})
     return {"summary": result.content}
+
+def generate_questions(state: GraphState):
+    summary = state.summary
+    template = PromptTemplate(
+        template = """
+        From the summary content given generate 5 questions: {summary}
+        """,
+        input_variables = ["summary"]
+    )
+    chain = template | llm
+    result = chain.invoke({"summary": summary})
+    return {"questions": result.content}
+
+def next_steps(state: GraphState):
+    summary = state.summary
+    template = PromptTemplate(
+        template = """
+        What next steps would you suggest based on the summary given: {summary}
+        For instance, if the video is about the fundamentals of supervised machine learning
+        you can get into using the titanic dataset and explaining how it relates to supervised learning
+        """,
+        input_variables = ["summary"]
+    )
+    chain = template | llm
+    result = chain.invoke({"summary": summary})
+    return {"next_steps": result.content}
+
+
+def find_keyword(state: GraphState):
+    transcript = state.transcript
+    template = PromptTemplate(
+        template = """
+        Extract the most relevant keyword from the following transcript:
+        {transcript}
+        """,
+        input_variables = ["transcript"]
+    )
+    chain = template | llm
+    result = chain.invoke({"transcript": transcript})
+    return {"keyword": result.content}
+
+def video_suggestion(state: GraphState):
+    keyword = state.keyword
+    tool = YouTubeSearchTool()
+    video_suggestions = tool.invoke(keyword)
+    return {"video_suggestions": video_suggestions}
+
+builder = StateGraph(GraphState)
+
