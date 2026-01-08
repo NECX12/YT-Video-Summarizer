@@ -6,6 +6,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_community.tools import YouTubeSearchTool
 from langgraph.graph import StateGraph, START, END
 from youtube_transcript_api import YouTubeTranscriptApi
+from logger import logger, count_tokens, TOKEN_LIMIT
 
 load_dotenv()
 
@@ -58,6 +59,10 @@ def summarize_transcript(state: GraphState):
         Summarize the following transcript in a concise manner: {transcript}
     """,
     input_variables = ["transcript"])
+    # build the prompt text we'll send to the model and log token count
+    prompt_text = template.template + "\n" + (transcript or "")
+    tokens = count_tokens(prompt_text)
+    logger.info("node=summarize_transcript tokens=%s", tokens)
     chain = template | llm
     result = chain.invoke({"transcript": transcript})
     return {"summary": result.content}
@@ -100,7 +105,23 @@ def find_keyword(state: GraphState):
     )
     llm_with_structured_output = llm.with_structured_output(Keywords)
     chain = template | llm_with_structured_output
-    result = chain.invoke({"transcript": transcript})
+    # prefer summary if available
+    text_source = "transcript"
+    text = transcript or ""
+    # build the prompt text for counting
+    prompt_text = template.template + "\n" + text
+    tokens = count_tokens(prompt_text)
+    logger.info("node=find_keyword before tokens=%s source=%s", tokens, text_source)
+
+    # simple safety: if token count exceeds configured limit, truncate proportionally
+    if tokens and tokens > TOKEN_LIMIT:
+        logger.warning("tokens=%d exceed limit=%d — truncating input", tokens, TOKEN_LIMIT)
+        scale = TOKEN_LIMIT / tokens
+        max_chars = max(200, int(len(text) * scale))
+        text = text[:max_chars]
+        logger.info("node=find_keyword after truncation chars=%d", len(text))
+
+    result = chain.invoke({"transcript": text})
     return {"keyword": result.keyword}
 
 def video_suggestion(state: GraphState):
