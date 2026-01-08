@@ -9,7 +9,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 
 load_dotenv()
 
-llm = ChatGroq(model="llama-8b-instant", temperature=0.8)
+llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0.8)
 
 class GraphState(BaseModel):
     video_url : str = Field(description= "The URL for the youtube video")
@@ -24,6 +24,9 @@ class GraphState(BaseModel):
 
 class ExtractVideoID(BaseModel):
     video_id : str = Field(description= "The Id of the youtube video")
+
+class Keywords(BaseModel):
+    keyword : List[str]
 
 
 def extract_video_id(state: GraphState):
@@ -95,9 +98,10 @@ def find_keyword(state: GraphState):
         """,
         input_variables = ["transcript"]
     )
-    chain = template | llm
+    llm_with_structured_output = llm.with_structured_output(Keywords)
+    chain = template | llm_with_structured_output
     result = chain.invoke({"transcript": transcript})
-    return {"keyword": result.content}
+    return {"keyword": result.keyword}
 
 def video_suggestion(state: GraphState):
     keyword = state.keyword
@@ -120,9 +124,9 @@ builder.add_edge("extract_video_id", "extract_transcript")
 builder.add_edge("extract_transcript", "summarize_transcript")
 builder.add_edge("summarize_transcript", 'generate_questions')
 builder.add_edge("summarize_transcript", "next_steps")
-builder.add_edge("extract_transcript", "find_keywords")
-builder.add_edge("find_keywords", "video_suggestion")
-builder.add_edge("generate_question", END)
+builder.add_edge("extract_transcript", "find_keyword")
+builder.add_edge("find_keyword", "video_suggestion")
+builder.add_edge("generate_questions", END)
 builder.add_edge("next_steps", END)
 builder.add_edge("video_suggestion", END)
 
